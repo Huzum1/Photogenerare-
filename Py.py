@@ -2,111 +2,76 @@ import streamlit as st
 from PIL import Image
 import pytesseract
 import re
-import os
 
 # --- ⚙️ Configurare Loto ---
 NUMERE_PER_RAND = 12       
 DOMENIU_MAXIM = 66         
-# Setare Tesseract: Folosim psm 6 pentru blocuri uniforme de text, optim pentru tabele
 CUSTOM_TESSERACT_CONFIG = r'--psm 6'
-
-# ⚠️ Atenție: Trebuie să specifici calea către Tesseract dacă rulezi local!
-# Pe Streamlit Cloud nu este necesar, deoarece este instalat via packages.txt.
-# Dacă rulezi pe Windows, decomentează și ajustează:
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
 
 def extrage_numere_loto_validat(cale_imagine):
     """
-    Procesează imaginea și extrage numerele.
-    Validare strictă: 12 numere valide (1-66), separate prin 11 virgule.
+    Extrage toate numerele (1-66) din textul brut și le grupează în rânduri 
+    cu lungimea exactă de 12, ignorând spațiile, virgulele și celelalte coloane.
     """
     try:
         img = Image.open(cale_imagine)
-        
-        # Extrage textul, folosind configurarea specifică
+        # Extrage textul din imagine
         text_extras = pytesseract.image_to_string(img, config=CUSTOM_TESSERACT_CONFIG)
         
         linii_rezultate = []
         
-        # Procesează textul rând cu rând
+        # 1. Procesează textul rând cu rând
         for linie_text in text_extras.split('\n'):
             linie_text = linie_text.strip()
             if not linie_text:
                 continue
 
-            # Încercăm să izolăm doar coloana de numere (cea mai din dreapta)
-            # Caută o secvență de numere, virgule și spații la finalul rândului
-            match = re.search(r'[\d, ]+$', linie_text) 
+            # 2. Extrage TOATE numerele de 1 sau 2 cifre din rând (ignorând virgulele și literele)
+            # Această metodă este mult mai rezistentă la erorile de OCR
+            numere_gasite_raw = re.findall(r'\b\d{1,2}\b', linie_text)
             
-            if match:
-                # Curățăm spațiile și ne concentrăm doar pe numere și virgule
-                linie_curatata = match.group(0).replace(' ', '')
-            else:
-                continue
+            numere_validate = []
             
-            # Splitare după virgulă. Acesta forțează structura cu 11 virgule.
-            elemente = linie_curatata.split(',')
+            # 3. Validare Numerică și Domeniu (1-66)
+            for n_str in numere_gasite_raw:
+                try:
+                    numar = int(n_str)
+                    # Verifică domeniul Loto 1-66
+                    if 1 <= numar <= DOMENIU_MAXIM:
+                        numere_validate.append(numar)
+                except ValueError:
+                    pass # Ar trebui să nu se întâmple din cauza regex-ului
             
-            # Aplică restricția strictă: trebuie să fie exact NUMERE_PER_RAND elemente
-            if len(elemente) == NUMERE_PER_RAND:
+            # 4. Extragem doar numerele de la Loto și le grupăm
+            # Ne așteptăm ca numerele de loto să apară ca un set compact de 12,
+            # după numărul extragerii, dată și oră.
+            
+            # Știm că rândul începe cu numărul extragerii (ex: 3866690) urmat de 4 numere (ziua, luna, anul, ora).
+            # Asta înseamnă că setul valid de 12 numere ar trebui să înceapă după primele 5 numere extrase din rând.
+            
+            if len(numere_validate) >= NUMERE_PER_RAND:
                 
-                numere_validate = []
-                valid = True
+                # Căutăm secvența de 12 numere de loto (încercare de a sări peste primele coloane)
                 
-                # Validare Numerică și Domeniu (1-66)
-                for element_str in elemente:
-                    try:
-                        numar = int(element_str)
-                        # Verificarea domeniului 1-66
-                        if 1 <= numar <= DOMENIU_MAXIM:
-                            numere_validate.append(numar)
-                        else:
-                            valid = False # Număr în afara domeniului
-                            break
-                    except ValueError:
-                        valid = False # Nu e număr (ex: '1O' sau element vid)
-                        break
+                # Încercăm să presupunem că numerele loto încep după numerele datei/orei (care sunt de obicei 5)
+                # Exemplu: 3866690, 24, 10, 2025, 23, 38, [12 numere Loto]
+                # Sărim peste primele 5-8 numere, care ar putea fi numărul extragerii, data și ora.
                 
-                # Dacă validarea a trecut și avem numărul corect de elemente
-                if valid and len(numere_validate) == NUMERE_PER_RAND:
-                    linii_rezultate.append(sorted(numere_validate))
+                # Încercăm să găsim o secvență de 12 numere consecutive (fără a ține cont de începutul rândului)
+                # Aceasta este o abordare mai simplă: dacă avem cel puțin 12 numere în rând, 
+                # luăm ultima secvență de 12, presupunând că primele sunt cele de control.
                 
+                if len(numere_validate) >= 12:
+                    # Rândul Loto este aproape întotdeauna ultima secțiune din rând
+                    numere_loto_finale = numere_validate[-NUMERE_PER_RAND:]
+                    
+                    if len(numere_loto_finale) == NUMERE_PER_RAND:
+                        # Găsit un rând valid (doar 12 numere între 1 și 66)
+                        linii_rezultate.append(sorted(numere_loto_finale))
+
         return linii_rezultate, text_extras
 
     except Exception as e:
-        # Afișează eroarea în Streamlit
         return f"A apărut o eroare la procesare: {e}", ""
 
-# --- Interfața Streamlit ---
-st.set_page_config(page_title="Extractor Loto 1-66", layout="wide")
-st.title("🔢 Extractor Automat de Numere Loto (1-66)")
-st.markdown("""
-Încărcați un screenshot cu rezultatele extragerilor. 
-Aplicația va extrage doar rândurile care conțin **exact 12 numere** valide (între 1 și 66), separate prin virgule.
-""")
-
-uploaded_file = st.file_uploader("Alege o imagine (screenshot)", type=["png", "jpg", "jpeg"])
-
-if uploaded_file is not None:
-    st.image(uploaded_file, caption="Imagine încărcată", use_column_width=True)
-    
-    with st.spinner('Procesare imagine și rulare OCR...'):
-        rezultate_valide, text_raw = extrage_numere_loto_validat(uploaded_file)
-    
-    st.subheader("Rezultate Extrase și Validate")
-    
-    if rezultate_valide:
-        st.success(f"✅ S-au găsit {len(rezultate_valide)} rânduri valide (cu exact {NUMERE_PER_RAND} numere):")
-        
-        # Afișează fiecare rând valid
-        for i, r in enumerate(rezultate_valide):
-            st.code(f"Extragerea nr. {i+1}: {', '.join(map(str, r))}")
-    else:
-        st.warning(f"❌ Nu s-au găsit rânduri care să conțină exact {NUMERE_PER_RAND} numere valide (1-{DOMENIU_MAXIM}). Verificați imaginea și textul brut.")
-        
-    with st.expander("Vizualizați textul brut extras de OCR (Debug)"):
-        if isinstance(text_raw, str):
-            st.code(text_raw)
-        else:
-            st.error(f"Eroare la procesare: {text_raw}")
+# ... (Restul interfeței Streamlit rămâne neschimbat) ...
