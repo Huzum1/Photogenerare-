@@ -101,8 +101,9 @@ if uploaded_file is not None:
     if rezultate_valide and isinstance(rezultate_valide, list):
         st.success(f"✅ S-au găsit {len(rezultate_valide)} rânduri valide:")
         
-        for i, r in enumerate(rezultate_valide):
-            st.code(f"Extragerea nr. {i+1}: {', '.join(map(str, r))}")
+        # AICI ESTE MODIFICAREA: Afișăm doar numerele, fără textul "Extragerea nr. X:"
+        for r in rezultate_valide:
+            st.code(', '.join(map(str, r))) # Afiseaza doar numerele separate prin virgula
     else:
         st.warning(f"❌ Nu s-au găsit rânduri care să conțină exact {NUMERE_PER_RAND} numere valide (1-{DOMENIU_MAXIM}).")
         
