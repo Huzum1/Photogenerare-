@@ -48,7 +48,6 @@ def extrage_numere_loto_validat(cale_imagine):
                 continue
 
             # 1. Extrage TOATE numerele de 1 sau 2 cifre din rând
-            # \b asigură că se extrag numere întregi (nu părți din numere mai mari)
             numere_gasite_raw = re.findall(r'\b\d{1,2}\b', linie_text)
             
             numere_validate = []
@@ -64,14 +63,10 @@ def extrage_numere_loto_validat(cale_imagine):
                     pass
             
             # 3. Găsirea setului de 12 numere Loto
-            # Ignorăm primele numere care pot fi numărul extragerii, data sau ora
-            
             if len(numere_validate) >= NUMERE_PER_RAND:
-                # Presupunem că numerele Loto sunt ultimele 12 numere valide din rând
                 numere_loto_finale = numere_validate[-NUMERE_PER_RAND:]
                     
                 if len(numere_loto_finale) == NUMERE_PER_RAND:
-                    # Găsit un rând valid
                     linii_rezultate.append(sorted(numere_loto_finale))
 
         return linii_rezultate, text_extras
@@ -101,14 +96,44 @@ if uploaded_file is not None:
     if rezultate_valide and isinstance(rezultate_valide, list):
         st.success(f"✅ S-au găsit {len(rezultate_valide)} rânduri valide:")
         
-        # AICI ESTE MODIFICAREA: Afișăm doar numerele, fără textul "Extragerea nr. X:"
+        # MODIFICAREA 1: Afișăm doar numerele (fără textul descriptiv)
         for r in rezultate_valide:
-            st.code(', '.join(map(str, r))) # Afiseaza doar numerele separate prin virgula
+            st.code(', '.join(map(str, r))) 
     else:
         st.warning(f"❌ Nu s-au găsit rânduri care să conțină exact {NUMERE_PER_RAND} numere valide (1-{DOMENIU_MAXIM}).")
         
+    # MODIFICAREA 2: Curățarea textului brut din expanderul de debug
     with st.expander("Vizualizați textul brut extras de OCR (Debug)"):
         if isinstance(text_raw, str):
-            st.code(text_raw)
+            # 1. Încercăm să găsim începutul datelor relevante
+            start_marker_1 = "Rychlé kodky" # Marcaj tipic din textul brut
+            start_marker_2 = "MENU S LOTERIE"
+            
+            start_index_1 = text_raw.find(start_marker_1)
+            start_index_2 = text_raw.find(start_marker_2)
+            
+            # Alegem cel mai mic index pozitiv
+            if start_index_1 != -1 and start_index_2 != -1:
+                start_index = min(start_index_1, start_index_2)
+            elif start_index_1 != -1:
+                start_index = start_index_1
+            elif start_index_2 != -1:
+                start_index = start_index_2
+            else:
+                start_index = -1
+                
+            text_filtru = text_raw
+            if start_index != -1:
+                text_filtru = text_raw[start_index:]
+                
+            # 2. Încercăm să găsim sfârșitul datelor relevante
+            end_marker = "Rezultate Extrase si Validate"
+            end_index = text_filtru.find(end_marker)
+            
+            if end_index != -1:
+                # Taie tot ce este de la markerul de sfârșit în jos
+                text_filtru = text_filtru[:end_index]
+            
+            st.code(text_filtru.strip())
         else:
             st.error(f"Eroare la procesare: {rezultate_valide}")
