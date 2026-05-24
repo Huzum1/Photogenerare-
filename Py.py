@@ -62,11 +62,10 @@ if option == "📝 Adaugă Runde":
                                     round_date = timestamp_part
                                     round_time = "--:--:--"
                                 
-                                # Înlocuiește virgulele dintre numere cu spațiu simplu
-                                clean_numbers = numbers_part.replace(",", " ").strip()
+                                # Curățăm spațiile inutile din jurul numerelor, dar păstrăm virgula formatului original
+                                clean_numbers = numbers_part.replace(" ", "").strip()
                                 
-                                # Identifică ID-ul rundei (opțional). Deoarece formatul tău nu are ID explicit,
-                                # folosim ora extragerii ca ID, sau generăm o numerotare logică bazată pe poziție.
+                                # Generare ID rundă pe baza orei
                                 round_id = f"R-{round_time.replace(':', '')}"
                                 
                                 # Creare obiect rundă
@@ -121,7 +120,7 @@ if option == "📝 Adaugă Runde":
             if st.button("❌ Ascunde Extragere"):
                 st.session_state.show_extraction = False
         
-        # Afișare text area cu numerele finale
+        # Afișare text area cu numerele finale separate prin virgulă
         if hasattr(st.session_state, 'show_extraction') and st.session_state.show_extraction:
             st.divider()
             st.success(f"✅ Toate cele {total_rounds} seturi de numere au fost extrase!")
@@ -183,7 +182,7 @@ elif option == "🎯 Extrage Numere":
             numbers_text = "\n".join(all_numbers)
             
             st.text_area(
-                f"Format curat (gata de pus în scriptul de analiză):",
+                f"Format curat (cu virgulă):",
                 value=numbers_text,
                 height=400
             )
