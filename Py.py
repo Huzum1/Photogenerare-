@@ -1,139 +1,206 @@
 import streamlit as st
-from PIL import Image
-import pytesseract
+import pandas as pd
 import re
-import os
 
-# --- ⚙️ Configurare Loto ---
-NUMERE_PER_RAND = 12       
-DOMENIU_MAXIM = 66         
-CUSTOM_TESSERACT_CONFIG = r'--psm 6'
+# Configurare pagină
+st.set_page_config(page_title="Generator Numere Italy 20/90", page_icon="🎲", layout="wide")
 
-# **CRITIC:** Setarea căii Tesseract pentru Streamlit Cloud
-# Verificăm dacă suntem pe mediul Streamlit Cloud
-if os.environ.get('STREAMLIT_SERVER_ENABLE_CORS') is not None:
-    try:
-        # Calea standard pe serverele bazate pe Debian/Ubuntu (folosite de Streamlit)
-        pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-    except Exception as e:
-        # Nu putem continua fără Tesseract, dar permitem aplicației să pornească
-        st.error(f"Eroare la setarea căii Tesseract pe Cloud: {e}")
-        pytesseract.pytesseract.tesseract_cmd = '' # Setează gol pentru a evita crash-ul total la import
-else:
-    # Setare pentru rulare locală (decomentează dacă rulezi pe propriul PC)
-    # Ex: pe Windows: pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-    pass
+# Titlu principal
+st.title("🎲 Aplicație Gestionare Runde - Italy Keno 20/90")
 
+# Inițializare session state
+if 'rounds' not in st.session_state:
+    st.session_state.rounds = []
 
-def extrage_numere_loto_validat(cale_imagine):
-    """
-    Extrage toate numerele (1-66) din textul brut și le grupează în rânduri 
-    cu lungimea exactă de 12, ignorând delimitatorii și coloanele de control.
-    """
-    if not pytesseract.pytesseract.tesseract_cmd:
-        return ["Tesseract nu a putut fi inițializat. Verificați packages.txt!"], ""
+# Sidebar pentru navigare
+option = st.sidebar.selectbox(
+    "Alege o opțiune:",
+    ["📝 Adaugă Runde", "🎯 Extrage Numere"]
+)
 
-    try:
-        img = Image.open(cale_imagine)
-        
-        # Extrage textul din imagine
-        text_extras = pytesseract.image_to_string(img, config=CUSTOM_TESSERACT_CONFIG)
-        
-        linii_rezultate = []
-        
-        # Procesează textul rând cu rând (fiecare rând de text citit de OCR)
-        for linie_text in text_extras.split('\n'):
-            linie_text = linie_text.strip()
-            if not linie_text:
-                continue
-
-            # 1. Extrage TOATE numerele de 1 sau 2 cifre din rând
-            numere_gasite_raw = re.findall(r'\b\d{1,2}\b', linie_text)
-            
-            numere_validate = []
-            
-            # 2. Validare Numerică și Domeniu (1-66)
-            for n_str in numere_gasite_raw:
-                try:
-                    numar = int(n_str)
-                    # Verifică domeniul Loto 1-66
-                    if 1 <= numar <= DOMENIU_MAXIM:
-                        numere_validate.append(numar)
-                except ValueError:
-                    pass
-            
-            # 3. Găsirea setului de 12 numere Loto
-            if len(numere_validate) >= NUMERE_PER_RAND:
-                numere_loto_finale = numere_validate[-NUMERE_PER_RAND:]
+# ========== OPȚIUNEA 1: ADAUGĂ RUNDE ==========
+if option == "📝 Adaugă Runde":
+    st.header("Adaugă Runde Italy 20/90")
+    
+    st.write("**Lipește rundele în formatul următor:**")
+    st.code("24-05-2026 00:39:59 | 3,6,17,21,24,42,48,49,53,54,56,57,58,60,61,63,65,69,73,77\n24-05-2026 00:34:59 | 1,5,6,13,18,19,25,32,36,41,44,47,49,52,73,74,82,83,86,90")
+    
+    # Text area mare pentru multiple runde
+    rounds_input = st.text_area(
+        "Lipește toate rundele din fișier:",
+        placeholder="Lipește liniile aici...",
+        height=300
+    )
+    
+    col1, col2, col3 = st.columns([1, 1, 3])
+    
+    with col1:
+        if st.button("➕ Adaugă Rundele", type="primary"):
+            if rounds_input.strip():
+                lines = rounds_input.strip().split('\n')
+                added_count = 0
+                error_count = 0
+                
+                i = 0
+                while i < len(lines):
+                    line = lines[i].strip()
                     
-                if len(numere_loto_finale) == NUMERE_PER_RAND:
-                    linii_rezultate.append(sorted(numere_loto_finale))
-
-        return linii_rezultate, text_extras
-
-    except Exception as e:
-        return f"A apărut o eroare la procesare: {e}", ""
-
-
-# --- Interfața Streamlit ---
-st.set_page_config(page_title="Extractor Loto 1-66", layout="wide")
-st.title("🔢 Extractor Automat de Numere Loto (1-66)")
-st.markdown("""
-Încărcați un screenshot cu rezultatele extragerilor. 
-Aplicația va extrage doar rândurile care conțin **exact 12 numere** valide (între 1 și 66).
-""")
-
-uploaded_file = st.file_uploader("Alege o imagine (screenshot)", type=["png", "jpg", "jpeg"])
-
-if uploaded_file is not None:
-    st.image(uploaded_file, caption="Imagine încărcată", use_column_width=True)
-    
-    with st.spinner('Procesare imagine și rulare OCR...'):
-        rezultate_valide, text_raw = extrage_numere_loto_validat(uploaded_file)
-    
-    st.subheader("Rezultate Extrase și Validate")
-    
-    if rezultate_valide and isinstance(rezultate_valide, list):
-        st.success(f"✅ S-au găsit {len(rezultate_valide)} rânduri valide:")
-        
-        # MODIFICAREA 1: Afișăm doar numerele (fără textul descriptiv)
-        for r in rezultate_valide:
-            st.code(', '.join(map(str, r))) 
-    else:
-        st.warning(f"❌ Nu s-au găsit rânduri care să conțină exact {NUMERE_PER_RAND} numere valide (1-{DOMENIU_MAXIM}).")
-        
-    # MODIFICAREA 2: Curățarea textului brut din expanderul de debug
-    with st.expander("Vizualizați textul brut extras de OCR (Debug)"):
-        if isinstance(text_raw, str):
-            # 1. Încercăm să găsim începutul datelor relevante
-            start_marker_1 = "Rychlé kodky" # Marcaj tipic din textul brut
-            start_marker_2 = "MENU S LOTERIE"
-            
-            start_index_1 = text_raw.find(start_marker_1)
-            start_index_2 = text_raw.find(start_marker_2)
-            
-            # Alegem cel mai mic index pozitiv
-            if start_index_1 != -1 and start_index_2 != -1:
-                start_index = min(start_index_1, start_index_2)
-            elif start_index_1 != -1:
-                start_index = start_index_1
-            elif start_index_2 != -1:
-                start_index = start_index_2
+                    if line:
+                        try:
+                            # Verifică dacă linia conține caracterul separator |
+                            if '|' in line:
+                                timestamp_part, numbers_part = line.split('|', 1)
+                                timestamp_part = timestamp_part.strip()
+                                numbers_part = numbers_part.strip()
+                                
+                                # Extrage data și ora din timestamp (ex: "24-05-2026 00:39:59")
+                                timestamp_segments = timestamp_part.split(' ')
+                                if len(timestamp_segments) >= 2:
+                                    round_date = timestamp_segments[0].strip()
+                                    round_time = timestamp_segments[1].strip()
+                                else:
+                                    round_date = timestamp_part
+                                    round_time = "--:--:--"
+                                
+                                # Înlocuiește virgulele dintre numere cu spațiu simplu
+                                clean_numbers = numbers_part.replace(",", " ").strip()
+                                
+                                # Identifică ID-ul rundei (opțional). Deoarece formatul tău nu are ID explicit,
+                                # folosim ora extragerii ca ID, sau generăm o numerotare logică bazată pe poziție.
+                                round_id = f"R-{round_time.replace(':', '')}"
+                                
+                                # Creare obiect rundă
+                                round_data = {
+                                    'Id': round_id,
+                                    'Data': round_date,
+                                    'Ora': round_time,
+                                    'Numere': clean_numbers
+                                }
+                                
+                                st.session_state.rounds.append(round_data)
+                                added_count += 1
+                            else:
+                                error_count += 1
+                        except Exception as e:
+                            error_count += 1
+                    
+                    # Trecem la linia următoare
+                    i += 1
+                
+                if added_count > 0:
+                    st.success(f"✅ {added_count} runde adăugate cu succes!")
+                if error_count > 0:
+                    st.warning(f"⚠️ {error_count} linii nu au putut fi adăugate (format incorect sau nerecunoscut)")
+                
+                st.rerun()
             else:
-                start_index = -1
-                
-            text_filtru = text_raw
-            if start_index != -1:
-                text_filtru = text_raw[start_index:]
-                
-            # 2. Încercăm să găsim sfârșitul datelor relevante
-            end_marker = "Rezultate Extrase si Validate"
-            end_index = text_filtru.find(end_marker)
+                st.error("⚠️ Te rog introdu cel puțin o rundă!")
+    
+    with col2:
+        if st.session_state.rounds:
+            if st.button("🗑️ Șterge Tot"):
+                st.session_state.rounds = []
+                st.rerun()
+    
+    # Afișare toate rundele salvate în memorie
+    if st.session_state.rounds:
+        st.divider()
+        total_rounds = len(st.session_state.rounds)
+        st.subheader(f"📊 Total Runde Salvate: {total_rounds}")
+        
+        # Secțiune de extragere rapidă direct în prima pagină
+        col_extract1, col_extract2, col_extract3 = st.columns([1, 1, 3])
+        
+        with col_extract1:
+            if st.button("🔍 Extrage Numerele", type="primary"):
+                all_numbers = [round_data['Numere'] for round_data in st.session_state.rounds]
+                st.session_state.extracted_numbers = "\n".join(all_numbers)
+                st.session_state.show_extraction = True
+        
+        with col_extract2:
+            if st.button("❌ Ascunde Extragere"):
+                st.session_state.show_extraction = False
+        
+        # Afișare text area cu numerele finale
+        if hasattr(st.session_state, 'show_extraction') and st.session_state.show_extraction:
+            st.divider()
+            st.success(f"✅ Toate cele {total_rounds} seturi de numere au fost extrase!")
             
-            if end_index != -1:
-                # Taie tot ce este de la markerul de sfârșit în jos
-                text_filtru = text_filtru[:end_index]
+            st.text_area(
+                f"Numerele extrase ({total_rounds} runde):",
+                value=st.session_state.extracted_numbers,
+                height=300
+            )
             
-            st.code(text_filtru.strip())
-        else:
-            st.error(f"Eroare la procesare: {rezultate_valide}")
+            st.download_button(
+                label=f"📥 Descarcă Numerele ({total_rounds} runde)",
+                data=st.session_state.extracted_numbers.encode('utf-8'),
+                file_name="numere_extrase.txt",
+                mime="text/plain",
+            )
+        
+        st.divider()
+        
+        # Tabelul interactiv cu structura datelor
+        df_all = pd.DataFrame(st.session_state.rounds)
+        st.dataframe(df_all, use_container_width=True, hide_index=True)
+        
+        # Export fișier tabelar .csv complet
+        col_export1, col_export2 = st.columns([1, 4])
+        with col_export1:
+            csv = df_all.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label=f"📥 Descarcă CSV ({total_rounds} runde)",
+                data=csv,
+                file_name="runde_complete_italy.csv",
+                mime="text/csv",
+            )
+
+# ========== OPȚIUNEA 2: EXTRAGE NUMERE ==========
+elif option == "🎯 Extrage Numere":
+    st.header("Extrage Numere Curate pentru Backtesting")
+    
+    if not st.session_state.rounds:
+        st.warning("⚠️ Nu ai nicio rundă adăugată! Mergi la 'Adaugă Runde' mai întâi.")
+    else:
+        total_rounds = len(st.session_state.rounds)
+        st.write(f"**Total runde disponibile în sistem: {total_rounds}**")
+        
+        st.divider()
+        
+        if st.button("🔍 Generează fișierul text final", type="primary"):
+            all_numbers = [round_data['Numere'] for round_data in st.session_state.rounds]
+            extracted_count = len(all_numbers)
+            
+            if extracted_count == total_rounds:
+                st.success(f"✅ Toate cele {extracted_count} seturi de numere au fost extrase cu succes!")
+            else:
+                st.error(f"⚠️ Eroare: S-au procesat doar {extracted_count} din {total_rounds} runde!")
+            
+            st.divider()
+            st.subheader(f"📋 Numerele Extrase ({extracted_count} runde)")
+            
+            numbers_text = "\n".join(all_numbers)
+            
+            st.text_area(
+                f"Format curat (gata de pus în scriptul de analiză):",
+                value=numbers_text,
+                height=400
+            )
+            
+            col_download1, col_download2 = st.columns([1, 4])
+            with col_download1:
+                st.download_button(
+                    label=f"📥 Descarcă Fișierul Text ({extracted_count} runde)",
+                    data=numbers_text.encode('utf-8'),
+                    file_name="runde15.txt",
+                    mime="text/plain",
+                )
+
+# Footer aplicație
+st.divider()
+st.markdown("""
+<div style="text-align: center; color: #666; padding: 20px;">
+    Adaptat pentru Italia Keno 20/90 | Made with ❤️ using Streamlit
+</div>
+""", unsafe_allow_html=True)
